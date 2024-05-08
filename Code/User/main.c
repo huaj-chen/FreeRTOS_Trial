@@ -37,6 +37,7 @@
 
 /* LED任务句柄 */
 static TaskHandle_t Task_Handle = NULL;
+static TaskHandle_t Task3_Handle = NULL;
 
 /********************************** 内核对象句柄 *********************************/
 /*
@@ -61,14 +62,18 @@ StaticTask_t xTask3TCB;
 StackType_t xIdleTaskStack[100];
 StaticTask_t xIdleTaskTCB;
 
+static int Task1RunFlag = 0;
+static int Task2RunFlag = 0;
+static int Task3RunFlag = 0;
+
 /*
 *************************************************************************
 *                             函数声明
 *************************************************************************
 */
-
-static void TaskWithParam(void* pvParameters);//试验同一个函数传不同参数创建不同任务
-static void printf2(void* pvParameters);
+static void Task1(void* param);
+static void Task2(void* param);
+static void printf3(void* pvParameters);//静态分配需要的函数
 void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
                                                StackType_t ** ppxIdleTaskStackBuffer,
                                                uint32_t * pulIdleTaskStackSize );
@@ -86,25 +91,25 @@ int main(void)
 {	
   	USART_Config();
 
-	xTaskCreate((TaskFunction_t )TaskWithParam, /* 任务入口函数 */
+	xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
                         (const char*    )"TASK1",/* 任务名字 */
-                        (uint16_t       )512,   /* 任务栈大小 */
-                        (void*          )1,	/* 任务入口函数参数 */
+                        (uint16_t       )100,   /* 任务栈大小 */
+                        (void*          )NULL,	/* 任务入口函数参数 */
                         (UBaseType_t    )2,	    /* 任务的优先级 */
                         (TaskHandle_t*  )&Task_Handle);/* 任务控制块指针 */
 
   
-    xTaskCreate((TaskFunction_t )TaskWithParam, /* 任务入口函数 */
+    xTaskCreate((TaskFunction_t )Task2, /* 任务入口函数 */
                         (const char*    )"Task2",/* 任务名字 */
-                        (uint16_t       )512,   /* 任务栈大小 */
-                        (void*          )4,	/* 任务入口函数参数 */
+                        (uint16_t       )100,   /* 任务栈大小 */
+                        (void*          )NULL,	/* 任务入口函数参数 */
                         (UBaseType_t    )2,	    /* 任务的优先级 */
                         NULL);/* 任务控制块指针 */
 
-	xTaskCreateStatic((TaskFunction_t )printf2, /* 任务入口函数 */
+	Task3_Handle = xTaskCreateStatic((TaskFunction_t )printf3, /* 任务入口函数 */
                         (const char*    )"Task3",/* 任务名字 */
-                        (uint16_t       )512,   /* 任务栈大小 */
-                        (void*          )4,	/* 任务入口函数参数 */
+                        (uint16_t       )100,   /* 任务栈大小 */
+                        (void*          )NULL,	/* 任务入口函数参数 */
                         (UBaseType_t    )2,	    /* 任务的优先级 */
                         xTask3Stack,
                         &xTask3TCB);/* 任务控制块指针 */
@@ -131,20 +136,54 @@ void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
 
 
 
-static void TaskWithParam(void* param)
+static void Task1(void* param)
 {
-	int val = (int)param;
+	TickType_t tstart = xTaskGetTickCount();
+	TickType_t t;
+	int flag = 0;
 	while(1)
 	{
-		printf("%d", val);
+		printf("1");
+		Task1RunFlag = 1;
+		Task2RunFlag = 0;
+		Task3RunFlag = 0;
+		t= xTaskGetTickCount();
+		
+		if(!flag && (t >= tstart + 10))
+		{
+			vTaskSuspend(Task3_Handle);
+			flag = 1;
+		}
+		if(t >= tstart + 20)
+		{
+			vTaskResume(Task3_Handle);
+			
+
+		}
+	
 	}
 }
 
-static void printf2(void* param)
+static void Task2(void* param)
 {
 	while(1)
 	{
+		Task1RunFlag = 0;
+		Task2RunFlag = 1;
+		Task3RunFlag = 0;
 		printf("2");
+		vTaskDelay(10);
+	}
+}
+
+static void printf3(void* param)
+{
+	while(1)
+	{
+		Task1RunFlag = 0;
+		Task2RunFlag = 0;
+		Task3RunFlag = 1;
+		printf("3");
 	}
 }
 /********************************END OF FILE****************************/
