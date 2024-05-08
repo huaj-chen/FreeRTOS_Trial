@@ -55,7 +55,11 @@ static TaskHandle_t Task_Handle = NULL;
 /*
  * 当我们在写应用程序的时候，可能需要用到一些全局变量。
  */
+StackType_t xTask3Stack[100];
+StaticTask_t xTask3TCB;
 
+StackType_t xIdleTaskStack[100];
+StaticTask_t xIdleTaskTCB;
 
 /*
 *************************************************************************
@@ -65,6 +69,9 @@ static TaskHandle_t Task_Handle = NULL;
 
 static void TaskWithParam(void* pvParameters);//试验同一个函数传不同参数创建不同任务
 static void printf2(void* pvParameters);
+void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
+                                               StackType_t ** ppxIdleTaskStackBuffer,
+                                               uint32_t * pulIdleTaskStackSize );
 
 
 /*****************************************************************
@@ -93,13 +100,34 @@ int main(void)
                         (void*          )4,	/* 任务入口函数参数 */
                         (UBaseType_t    )2,	    /* 任务的优先级 */
                         NULL);/* 任务控制块指针 */
-				
+
+	xTaskCreateStatic((TaskFunction_t )printf2, /* 任务入口函数 */
+                        (const char*    )"Task3",/* 任务名字 */
+                        (uint16_t       )512,   /* 任务栈大小 */
+                        (void*          )4,	/* 任务入口函数参数 */
+                        (UBaseType_t    )2,	    /* 任务的优先级 */
+                        xTask3Stack,
+                        &xTask3TCB);/* 任务控制块指针 */
+
+
+
+
+						
     vTaskStartScheduler();   /* 启动任务，开启调度 */
  
   
   while(1);   /* 正常不会执行到这里 */    
 }
 
+
+void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
+                                               StackType_t ** ppxIdleTaskStackBuffer,
+                                               uint32_t * pulIdleTaskStackSize )
+{
+	*ppxIdleTaskTCBBuffer = &xIdleTaskTCB;
+	*ppxIdleTaskStackBuffer = xIdleTaskStack;
+	*pulIdleTaskStackSize = 100;
+}
 
 
 
