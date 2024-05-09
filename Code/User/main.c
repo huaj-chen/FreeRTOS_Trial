@@ -23,6 +23,7 @@
 /* FreeRTOS头文件 */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 /* 开发板硬件bsp头文件 */
 //#include "bsp_led.h"
 #include "bsp_usart.h"
@@ -65,7 +66,9 @@ StaticTask_t xIdleTaskTCB;
 static int Task1RunFlag = 0;
 static int Task2RunFlag = 0;
 static int Task3RunFlag = 0;
-
+static int sum = 0;
+static QueueHandle_t QueueHandle ;//创建一个队列句柄
+static int flagCaleEnd = 0;
 /*
 *************************************************************************
 *                             函数声明
@@ -90,8 +93,13 @@ void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
 int main(void)
 {	
   	USART_Config();
+	  QueueHandle = xQueueCreate(2,sizeof(int));//创建一个队列
+    if(QueueHandle == NULL)
+    {
+      printf("create queue err\r\n");
+    }
 
-	xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
+	  xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
                         (const char*    )"TASK1",/* 任务名字 */
                         (uint16_t       )100,   /* 任务栈大小 */
                         (void*          )NULL,	/* 任务入口函数参数 */
@@ -106,18 +114,17 @@ int main(void)
                         (UBaseType_t    )2,	    /* 任务的优先级 */
                         NULL);/* 任务控制块指针 */
 
-	Task3_Handle = xTaskCreateStatic((TaskFunction_t )printf3, /* 任务入口函数 */
-                        (const char*    )"Task3",/* 任务名字 */
-                        (uint16_t       )100,   /* 任务栈大小 */
-                        (void*          )NULL,	/* 任务入口函数参数 */
-                        (UBaseType_t    )2,	    /* 任务的优先级 */
-                        xTask3Stack,
-                        &xTask3TCB);/* 任务控制块指针 */
+	  // Task3_Handle = xTaskCreateStatic((TaskFunction_t )printf3, /* 任务入口函数 */
+    //                     (const char*    )"Task3",/* 任务名字 */
+    //                     (uint16_t       )100,   /* 任务栈大小 */
+    //                     (void*          )NULL,	/* 任务入口函数参数 */
+    //                     (UBaseType_t    )2,	    /* 任务的优先级 */
+    //                     xTask3Stack,
+    //                     &xTask3TCB);/* 任务控制块指针 */
 
 
 
-
-						
+					
     vTaskStartScheduler();   /* 启动任务，开启调度 */
  
   
@@ -125,6 +132,7 @@ int main(void)
 }
 
 
+//静态创建任务时所需的函数
 void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
                                                StackType_t ** ppxIdleTaskStackBuffer,
                                                uint32_t * pulIdleTaskStackSize )
@@ -138,41 +146,28 @@ void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
 
 static void Task1(void* param)
 {
-	TickType_t tstart = xTaskGetTickCount();
-	TickType_t t;
-	int flag = 0;
+	int i = 0;
 	while(1)
 	{
-		printf("1");
-		Task1RunFlag = 1;
-		Task2RunFlag = 0;
-		Task3RunFlag = 0;
-		t= xTaskGetTickCount();
-		
-		if(!flag && (t >= tstart + 10))
-		{
-			vTaskSuspend(Task3_Handle);
-			flag = 1;
-		}
-		if(t >= tstart + 20)
-		{
-			vTaskResume(Task3_Handle);
-			
+	  for(i = 0; i < 10000000; i++)
+    {
+      sum++;
+    }
 
-		}
-	
+    xQueueSend(QueueHandle, &sum, portMAX_DELAY);
+    sum = 1;
 	}
 }
 
 static void Task2(void* param)
 {
+  int val;
 	while(1)
 	{
-		Task1RunFlag = 0;
-		Task2RunFlag = 1;
-		Task3RunFlag = 0;
-		printf("2");
-		vTaskDelay(10);
+    flagCaleEnd = 0;//标识等待队列等待了多长时间
+		xQueueReceive(QueueHandle, &val, portMAX_DELAY);
+    flagCaleEnd = 1;
+    printf("val:%d",val);
 	}
 }
 
