@@ -24,6 +24,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "semphr.h"
+
 /* 开发板硬件bsp头文件 */
 //#include "bsp_led.h"
 #include "bsp_usart.h"
@@ -66,9 +68,12 @@ StaticTask_t xIdleTaskTCB;
 static int Task1RunFlag = 0;
 static int Task2RunFlag = 0;
 static int Task3RunFlag = 0;
+static int flagCaleEnd = 0;
 static int sum = 0;
 static QueueHandle_t QueueHandle ;//创建一个队列句柄
-static int flagCaleEnd = 0;
+static xSemaphoreHandle semaphorehandle;
+static xSemaphoreHandle semaphUART;;
+
 /*
 *************************************************************************
 *                             函数声明
@@ -76,7 +81,8 @@ static int flagCaleEnd = 0;
 */
 static void Task1(void* param);
 static void Task2(void* param);
-static void printf3(void* pvParameters);//静态分配需要的函数
+static void Task3(void* pvParameters);//静态分配需要的函数
+static void TaskGenericFun(void* param);
 void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
                                                StackType_t ** ppxIdleTaskStackBuffer,
                                                uint32_t * pulIdleTaskStackSize );
@@ -92,40 +98,47 @@ void vApplicationGetIdleTaskMemory( StaticTask_t ** ppxIdleTaskTCBBuffer,
   ****************************************************************/
 int main(void)
 {	
-  	USART_Config();
-	  QueueHandle = xQueueCreate(2,sizeof(int));//创建一个队列
-    if(QueueHandle == NULL)
-    {
-      printf("create queue err\r\n");
-    }
+  USART_Config();
 
-	  xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
-                        (const char*    )"TASK1",/* 任务名字 */
-                        (uint16_t       )100,   /* 任务栈大小 */
-                        (void*          )NULL,	/* 任务入口函数参数 */
-                        (UBaseType_t    )2,	    /* 任务的优先级 */
-                        (TaskHandle_t*  )&Task_Handle);/* 任务控制块指针 */
+  //信号量测试
+  //1.创建计数型信号量
+  semaphorehandle = xSemaphoreCreateCounting(10,0);
 
-  
-    xTaskCreate((TaskFunction_t )Task2, /* 任务入口函数 */
-                        (const char*    )"Task2",/* 任务名字 */
-                        (uint16_t       )100,   /* 任务栈大小 */
-                        (void*          )NULL,	/* 任务入口函数参数 */
-                        (UBaseType_t    )2,	    /* 任务的优先级 */
-                        NULL);/* 任务控制块指针 */
+  //2.创建二进制信号量,实现互斥地访问串口
+  semaphUART = xSemaphoreCreateBinary();
+  xSemaphoreGive(semaphUART);
 
-	  // Task3_Handle = xTaskCreateStatic((TaskFunction_t )printf3, /* 任务入口函数 */
-    //                     (const char*    )"Task3",/* 任务名字 */
-    //                     (uint16_t       )100,   /* 任务栈大小 */
-    //                     (void*          )NULL,	/* 任务入口函数参数 */
-    //                     (UBaseType_t    )2,	    /* 任务的优先级 */
-    //                     xTask3Stack,
-    //                     &xTask3TCB);/* 任务控制块指针 */
+  // xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
+  //                     (const char*    )"TASK1",/* 任务名字 */
+  //                     (uint16_t       )100,   /* 任务栈大小 */
+  //                     (void*          )NULL,	/* 任务入口函数参数 */
+  //                     (UBaseType_t    )2,	    /* 任务的优先级 */
+  //                     (TaskHandle_t*  )&Task_Handle);/* 任务控制块指针 */
 
 
+  // xTaskCreate((TaskFunction_t )Task2, /* 任务入口函数 */
+  //                     (const char*    )"Task2",/* 任务名字 */
+  //                     (uint16_t       )100,   /* 任务栈大小 */
+  //                     (void*          )NULL,	/* 任务入口函数参数 */
+  //                     (UBaseType_t    )2,	    /* 任务的优先级 */
+  //                     NULL);/* 任务控制块指针 */
 
-					
-    vTaskStartScheduler();   /* 启动任务，开启调度 */
+  Task3_Handle = xTaskCreateStatic((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
+                      (const char*    )"Task3",/* 任务名字 */
+                      (uint16_t       )100,   /* 任务栈大小 */
+                      (void*          )"task3 is running",	/* 任务入口函数参数 */
+                      (UBaseType_t    )2,	    /* 任务的优先级 */
+                      xTask3Stack,
+                      &xTask3TCB);/* 任务控制块指针 */
+
+  xTaskCreate((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
+                      (const char*    )"Task4",/* 任务名字 */
+                      (uint16_t       )100,   /* 任务栈大小 */
+                      (void*          )"task4 is running",	/* 任务入口函数参数 */
+                      (UBaseType_t    )2,	    /* 任务的优先级 */
+                      NULL);/* 任务控制块指针 */
+
+  vTaskStartScheduler();   /* 启动任务，开启调度 */
  
   
   while(1);   /* 正常不会执行到这里 */    
@@ -153,9 +166,8 @@ static void Task1(void* param)
     {
       sum++;
     }
-
-    xQueueSend(QueueHandle, &sum, portMAX_DELAY);
-    sum = 1;
+    xSemaphoreGive(semaphorehandle);//计算完成，则释放信号量供别的任务读取
+		vTaskDelete(NULL);
 	}
 }
 
@@ -165,13 +177,13 @@ static void Task2(void* param)
 	while(1)
 	{
     flagCaleEnd = 0;//标识等待队列等待了多长时间
-		xQueueReceive(QueueHandle, &val, portMAX_DELAY);
+		xSemaphoreTake(semaphorehandle,portMAX_DELAY);
     flagCaleEnd = 1;
-    printf("val:%d",val);
+    printf("val:%d",sum);
 	}
 }
 
-static void printf3(void* param)
+static void Task3(void* param)
 {
 	while(1)
 	{
@@ -179,6 +191,17 @@ static void printf3(void* param)
 		Task2RunFlag = 0;
 		Task3RunFlag = 1;
 		printf("3");
+	}
+}
+
+static void TaskGenericFun(void* param)
+{
+	while(1)
+	{
+		xSemaphoreTake(semaphUART, portMAX_DELAY);
+    printf("print:%s\r\n",(char*)param);
+		xSemaphoreGive(semaphUART);
+		vTaskDelay(2);
 	}
 }
 /********************************END OF FILE****************************/

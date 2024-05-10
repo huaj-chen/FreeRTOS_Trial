@@ -41,3 +41,4 @@
 .\objects\main.o: ..\FreeRTOS\include\task.h
 .\objects\main.o: ..\FreeRTOS\include\list.h
 .\objects\main.o: ..\FreeRTOS\include\queue.h
+.\objects\main.o: ..\FreeRTOS\include\semphr.h
