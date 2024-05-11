@@ -38,8 +38,8 @@
  */
  /* 创建任务句柄 */
 
-/* LED任务句柄 */
-static TaskHandle_t Task_Handle = NULL;
+static TaskHandle_t Task1_Handle = NULL;
+static TaskHandle_t Task2_Handle = NULL;
 static TaskHandle_t Task3_Handle = NULL;
 
 /********************************** 内核对象句柄 *********************************/
@@ -100,43 +100,42 @@ int main(void)
 {	
   USART_Config();
 
-  //信号量测试
-  //1.创建计数型信号量
+  /*使用消息通知实现信号量*/
   semaphorehandle = xSemaphoreCreateCounting(10,0);
 
   //2.创建二进制信号量,实现互斥地访问串口
   semaphUART = xSemaphoreCreateBinary();
   xSemaphoreGive(semaphUART);
 
-  // xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
-  //                     (const char*    )"TASK1",/* 任务名字 */
+  xTaskCreate((TaskFunction_t )Task1, /* 任务入口函数 */
+                      (const char*    )"TASK1",/* 任务名字 */
+                      (uint16_t       )100,   /* 任务栈大小 */
+                      (void*          )NULL,	/* 任务入口函数参数 */
+                      (UBaseType_t    )2,	    /* 任务的优先级 */
+                      (TaskHandle_t*  )&Task1_Handle);/* 任务控制块指针 */
+
+
+  xTaskCreate((TaskFunction_t )Task2, /* 任务入口函数 */
+                      (const char*    )"Task2",/* 任务名字 */
+                      (uint16_t       )100,   /* 任务栈大小 */
+                      (void*          )NULL,	/* 任务入口函数参数 */
+                      (UBaseType_t    )2,	    /* 任务的优先级 */
+                      &Task2_Handle);/* 任务控制块指针 */
+
+  // Task3_Handle = xTaskCreateStatic((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
+  //                     (const char*    )"Task3",/* 任务名字 */
   //                     (uint16_t       )100,   /* 任务栈大小 */
-  //                     (void*          )NULL,	/* 任务入口函数参数 */
+  //                     (void*          )"task3 is running",	/* 任务入口函数参数 */
   //                     (UBaseType_t    )2,	    /* 任务的优先级 */
-  //                     (TaskHandle_t*  )&Task_Handle);/* 任务控制块指针 */
+  //                     xTask3Stack,
+  //                     &xTask3TCB);/* 任务控制块指针 */
 
-
-  // xTaskCreate((TaskFunction_t )Task2, /* 任务入口函数 */
-  //                     (const char*    )"Task2",/* 任务名字 */
+  // xTaskCreate((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
+  //                     (const char*    )"Task4",/* 任务名字 */
   //                     (uint16_t       )100,   /* 任务栈大小 */
-  //                     (void*          )NULL,	/* 任务入口函数参数 */
+  //                     (void*          )"task4 is running",	/* 任务入口函数参数 */
   //                     (UBaseType_t    )2,	    /* 任务的优先级 */
   //                     NULL);/* 任务控制块指针 */
-
-  Task3_Handle = xTaskCreateStatic((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
-                      (const char*    )"Task3",/* 任务名字 */
-                      (uint16_t       )100,   /* 任务栈大小 */
-                      (void*          )"task3 is running",	/* 任务入口函数参数 */
-                      (UBaseType_t    )2,	    /* 任务的优先级 */
-                      xTask3Stack,
-                      &xTask3TCB);/* 任务控制块指针 */
-
-  xTaskCreate((TaskFunction_t )TaskGenericFun, /* 任务入口函数 */
-                      (const char*    )"Task4",/* 任务名字 */
-                      (uint16_t       )100,   /* 任务栈大小 */
-                      (void*          )"task4 is running",	/* 任务入口函数参数 */
-                      (UBaseType_t    )2,	    /* 任务的优先级 */
-                      NULL);/* 任务控制块指针 */
 
   vTaskStartScheduler();   /* 启动任务，开启调度 */
  
@@ -162,11 +161,14 @@ static void Task1(void* param)
 	int i = 0;
 	while(1)
 	{
-	  for(i = 0; i < 10000000; i++)
+	  for(i = 0; i < 100000; i++)
     {
       sum++;
     }
-    xSemaphoreGive(semaphorehandle);//计算完成，则释放信号量供别的任务读取
+    for(i = 0;i < 10;i ++)
+    {
+          xTaskNotifyGive(Task2_Handle);//发通知给任务2，让任务2的value值加一
+    }
 		vTaskDelete(NULL);
 	}
 }
@@ -174,12 +176,15 @@ static void Task1(void* param)
 static void Task2(void* param)
 {
   int val;
+  int i = 0;
 	while(1)
 	{
     flagCaleEnd = 0;//标识等待队列等待了多长时间
-		xSemaphoreTake(semaphorehandle,portMAX_DELAY);
+		// xSemaphoreTake(semaphorehandle,portMAX_DELAY);
+    val = ulTaskNotifyTake(pdFALSE, portMAX_DELAY);//获取任务的消息
     flagCaleEnd = 1;
-    printf("val:%d",sum);
+
+    printf("val:%d,notifyvalue = %d,i = %d\r\n",sum,val,i++);
 	}
 }
 
